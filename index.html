@@ -409,11 +409,21 @@ function handlePhoto(e){
   reader.onload=ev=>{
     const img=new Image();
     img.onload=()=>{
-      const maxW=1000,scale=Math.min(1,maxW/img.width);
-      const c=document.createElement('canvas');
-      c.width=img.width*scale; c.height=img.height*scale;
-      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      const b64=c.toDataURL('image/jpeg',.7);
+      // 壓縮到300KB以下：先縮圖再逐步降品質
+      const MAX_BYTES = 300 * 1024;
+      const MAX_W = 1200;
+      const scale = Math.min(1, MAX_W / img.width);
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      let quality = 0.85;
+      let b64 = c.toDataURL('image/jpeg', quality);
+      // 估算bytes：base64長度 * 3/4
+      while (b64.length * 0.75 > MAX_BYTES && quality > 0.2) {
+        quality -= 0.1;
+        b64 = c.toDataURL('image/jpeg', quality);
+      }
       photoSlots[idx]=b64;
       el('prev'+idx).src=b64; el('prev'+idx).style.display='block';
       el('slot'+idx).classList.add('has-photo');
