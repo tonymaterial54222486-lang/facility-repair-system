@@ -263,6 +263,7 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
       </select>
       <button class="refresh-btn" onclick="loadRecords()">重新整理</button>
       <button class="refresh-btn" id="export-btn" style="background:#1a4a8a;display:none;" onclick="exportExcel()">📤 匯出</button>
+      <button class="refresh-btn" id="notify-btn" style="background:#7b3f00;display:none;" onclick="openNotifyPanel()">📨 寄送通知</button>
     </div>
     <div class="summary" id="q-summary"></div>
     <div class="list-wrap" id="q-list"></div>
@@ -271,6 +272,19 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
   <!-- 工單細項 -->
   <div id="s-detail" class="hidden">
     <div class="detail-wrap" id="detail-content"></div>
+  </div>
+</div>
+
+<!-- 收件人選擇彈出層 -->
+<div id="notify-overlay" class="overlay hidden" onclick="closeNotifyPanel()">
+  <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;padding:24px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto;">
+    <h3 style="margin:0 0 6px;font-size:17px;color:#0f6e56;">選擇收件人</h3>
+    <p style="margin:0 0 16px;font-size:13px;color:#888;">可多選，選完按確認寄出</p>
+    <div id="recipient-list" style="margin-bottom:16px;"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button onclick="closeNotifyPanel()" style="flex:1;padding:12px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:14px;cursor:pointer;">取消</button>
+      <button onclick="sendNotify()" style="flex:1;padding:12px;background:#0f6e56;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">確認寄出</button>
+    </div>
   </div>
 </div>
 
@@ -484,6 +498,8 @@ function loadRecords(){
   showLoading(true);
   const exportBtn=el('export-btn');
   if(exportBtn) exportBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
+  const notifyBtn=el('notify-btn');
+  if(notifyBtn) notifyBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
   fetch(GAS_URL+'?action=list&empId='+encodeURIComponent(currentUser.empId)+'&days='+el('q-days').value)
   .then(r=>r.json()).then(res=>{if(res.success){allRecords=res.records;renderList();}})
   .finally(()=>showLoading(false));
@@ -501,7 +517,9 @@ function renderList(){
     const cat=statusCat(r.progress);
     const div=document.createElement('div');
     div.className='rec-row';
+    const canNotify=currentUser.role==='facility'||currentUser.role==='facility_mgr';
     div.innerHTML=`
+      ${canNotify?`<input type="checkbox" class="rec-check" data-id="${esc(r.id)}" onclick="event.stopPropagation()" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;">`:'' }
       <div class="rec-dot ${cat}"></div>
       <div class="rec-main">
         <div class="rec-title">${esc(r.floor)} ${esc(r.area)}</div>
@@ -621,6 +639,57 @@ function exportExcel(){
     if(res.success) alert('✓ 已寄出！共 '+res.count+' 筆\n收件信箱：'+res.email);
     else alert(res.error||'匯出失敗');
   }).catch(()=>alert('連線失敗，請重試')).finally(()=>showLoading(false));
+}
+
+// ── 寄送通知 ──────────────────────────────────────────────
+let recipientOptions = []; // 從GAS載入
+
+function openNotifyPanel(){
+  const checks = document.querySelectorAll('.rec-check:checked');
+  if(checks.length === 0){ alert('請先勾選要通知的工單'); return; }
+
+  showLoading(true);
+  // 載入收件人清單
+  fetch(GAS_URL+'?action=recipients&empId='+encodeURIComponent(currentUser.empId))
+  .then(r=>r.json()).then(res=>{
+    if(!res.success){ alert(res.error||'無法載入收件人'); return; }
+    recipientOptions = res.recipients;
+    const listEl = el('recipient-list');
+    listEl.innerHTML = recipientOptions.map((r,i)=>
+      `<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #eee;border-radius:8px;margin-bottom:8px;cursor:pointer;">
+        <input type="checkbox" class="rcpt-check" value="${i}" style="width:18px;height:18px;">
+        <div>
+          <div style="font-size:14px;font-weight:500;">${esc(r.name)}</div>
+          <div style="font-size:12px;color:#888;">${esc(r.dept)} · ${esc(r.email)}</div>
+        </div>
+      </label>`
+    ).join('');
+    el('notify-overlay').classList.remove('hidden');
+  }).catch(()=>alert('連線失敗')).finally(()=>showLoading(false));
+}
+
+function closeNotifyPanel(){
+  el('notify-overlay').classList.add('hidden');
+}
+
+function sendNotify(){
+  const checkedIds = [...document.querySelectorAll('.rec-check:checked')].map(c=>c.dataset.id);
+  const checkedRcpts = [...document.querySelectorAll('.rcpt-check:checked')].map(c=>recipientOptions[parseInt(c.value)].email);
+
+  if(checkedIds.length===0){ alert('請勾選工單'); return; }
+  if(checkedRcpts.length===0){ alert('請選擇至少一位收件人'); return; }
+
+  closeNotifyPanel();
+  showLoading(true);
+  fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'sendNotify', empId:currentUser.empId, ids:checkedIds, recipients:checkedRcpts})
+  }).then(r=>r.json()).then(res=>{
+    if(res.success){
+      alert('✓ 已寄出！\n共 '+checkedIds.length+' 筆工單\n收件人：'+checkedRcpts.join('、'));
+      // 取消所有勾選
+      document.querySelectorAll('.rec-check').forEach(c=>c.checked=false);
+    } else alert(res.error||'寄送失敗');
+  }).catch(()=>alert('連線失敗')).finally(()=>showLoading(false));
 }
 </script>
 </body>
