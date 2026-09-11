@@ -207,7 +207,7 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
       <textarea id="r-desc" placeholder="請詳述區域位置及異常狀況"></textarea>
     </div>
     <div class="field">
-      <label class="lbl">上傳照片（限1張，自動壓縮至200KB以下）</label>
+      <label class="lbl">上傳照片（限1張，自動壓縮）</label>
       <div class="photo-upload-wrap">
         <div class="photo-slot" id="slot0" onclick="pickPhoto(0)">
           <span class="plus">＋</span><img id="prev0" style="display:none">
@@ -423,7 +423,7 @@ function handlePhoto(e){
   reader.onload=ev=>{
     const img=new Image();
     img.onload=()=>{
-      const MAX_BYTES = 200 * 1024; // 200KB上限
+      const MAX_BYTES = 800 * 1024; // 800KB上限（附件用，畫質清楚又不過大）
       const MAX_W = 1200;
       const scale = Math.min(1, MAX_W / img.width);
       const c = document.createElement('canvas');
