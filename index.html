@@ -262,6 +262,7 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
         <option value="open">未完成</option>
       </select>
       <button class="refresh-btn" onclick="loadRecords()">重新整理</button>
+      <button class="refresh-btn" id="export-btn" style="background:#1a4a8a;display:none;" onclick="exportExcel()">📤 匯出</button>
     </div>
     <div class="summary" id="q-summary"></div>
     <div class="list-wrap" id="q-list"></div>
@@ -463,6 +464,8 @@ function roleName(r){
 function loadRecords(){
   if(!currentUser) return;
   showLoading(true);
+  const exportBtn=el('export-btn');
+  if(exportBtn) exportBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
   fetch(GAS_URL+'?action=list&empId='+encodeURIComponent(currentUser.empId)+'&days='+el('q-days').value)
   .then(r=>r.json()).then(res=>{if(res.success){allRecords=res.records;renderList();}})
   .finally(()=>showLoading(false));
@@ -587,6 +590,19 @@ function deleteDetail(id){
     if(res.success){showScreen('s-query-list','報修進度查看',currentUser.name+'（'+roleName(currentUser.role)+'）');loadRecords();}
     else alert(res.error||'刪除失敗');
   }).catch(()=>alert('連線失敗')).finally(()=>showLoading(false));
+}
+
+function exportExcel(){
+  const days=el('q-days').value;
+  const statusFilter=el('q-status').value;
+  if(!confirm('確定要匯出目前篩選的工單資料並寄到您的信箱嗎？')) return;
+  showLoading(true);
+  fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'export',empId:currentUser.empId,days,statusFilter})
+  }).then(r=>r.json()).then(res=>{
+    if(res.success) alert('✓ 已寄出！共 '+res.count+' 筆\n收件信箱：'+res.email);
+    else alert(res.error||'匯出失敗');
+  }).catch(()=>alert('連線失敗，請重試')).finally(()=>showLoading(false));
 }
 </script>
 </body>
