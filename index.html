@@ -279,6 +279,9 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
 <script>
 const GAS_URL='https://script.google.com/macros/s/AKfycbxyq1XRF8VC_qObT9EDMFvlKesyySSk_ub4u7djjt7tu4JR52MA4SHIfRsrgOASWY42/exec';
 
+// 一進頁面就預先載入設定（員工對照表、樓層、區域）
+window.addEventListener('DOMContentLoaded', () => { loadConfig(); });
+
 let config={floors:[],areas:[],employees:{}};
 let currentUser=null;
 let allRecords=[];
@@ -382,7 +385,12 @@ function gotoQuery(){
 // ── 報修工號自動帶姓名 ──
 el('r-empid').addEventListener('input',()=>{
   const id=el('r-empid').value.trim();
-  if(config.employees[id]) el('r-name').value=config.employees[id];
+  if(config.employees && config.employees[id]) {
+    el('r-name').value=config.employees[id];
+  } else if(id.length >= 5) {
+    // config還沒載入時，主動重新嘗試載入一次
+    if(!config.floors.length) loadConfig().then && loadConfig();
+  }
 });
 function repairNext(){
   const name=el('r-name').value.trim();
