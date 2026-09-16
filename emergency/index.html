@@ -1426,7 +1426,7 @@ function renderTyphoonHist(){
           <span style="font-size:14px;font-weight:700;">🌀 ${r.typhoonName}</span>
           <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${tagBg};color:${tagClr};">${tagTxt}</span>
         </div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${r.date} · 建立：${r.createdBy?.name||'—'}</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${fmtDate(r.date)} · 建立：${r.createdBy?.name||'—'}</div>
         <div style="display:flex;align-items:center;gap:8px;">
           <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
             <div style="height:100%;width:${pct}%;background:${barClr};border-radius:3px;transition:width .4s;"></div>
@@ -1440,17 +1440,18 @@ function renderTyphoonHist(){
   updateSelCount();
   bindTyphoonHistEvents();
 }
-let _typhoonHistBound=false;
+let _typhoonHistHandler=null;
 function bindTyphoonHistEvents(){
-  if(_typhoonHistBound)return;
-  _typhoonHistBound=true;
   const list=document.getElementById('th-list');
-  list.addEventListener('click', function(e){
+  if(!list)return;
+  if(_typhoonHistHandler) list.removeEventListener('click',_typhoonHistHandler);
+  _typhoonHistHandler=function(e){
     const chk=e.target.closest('.js-toggle-sel');
     if(chk){ e.stopPropagation(); toggleSel(chk.dataset.id, e); return; }
     const info=e.target.closest('.js-open-detail');
     if(info){ openDetail(info.dataset.id); return; }
-  });
+  };
+  list.addEventListener('click',_typhoonHistHandler);
 }
 function toggleSel(id,e){
   e&&e.stopPropagation&&e.stopPropagation();
@@ -1623,7 +1624,7 @@ function renderQuakeHist(){
     return `<div class="hist-item js-open-quake" data-id="${r.id}" style="display:flex;align-items:center;gap:10px;padding:14px 16px;touch-action:manipulation;">
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span style="font-size:14px;font-weight:700;">🔴 ${r.date} ${r.time||''}</span>
+          <span style="font-size:14px;font-weight:700;">🔴 ${fmtDate(r.date)} ${fmtTime(r.time)}</span>
           <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${tagBg};color:${tagClr};">${tagTxt}</span>
         </div>
         <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">規模 M${r.mag||'?'} · 巡檢人：${r.inspector?.name||r.inspector||'—'}</div>
@@ -1688,7 +1689,7 @@ function renderPowerHist(){
     const total=r.checkData.length;
     const pct=total?Math.round(done/total*100):0;
     return `<div class="hist-item"><div class="hist-info">
-      <div class="hist-title">⚡ ${r.date} 停電恢復後巡檢</div>
+      <div class="hist-title">⚡ ${fmtDate(r.date)} 停電恢復後巡檢</div>
       <div class="hist-meta">巡檢人：${r.inspector?.name||'—'}</div>
       <div class="prog-wrap"><div class="prog-bar"><div class="prog-fill ${pct>=80?'':pct<40?'low':'mid'}" style="width:${pct}%"></div></div><span class="prog-txt">${done}/${total}</span></div>
     </div></div>`;
@@ -1867,6 +1868,52 @@ async function refreshDB(){
 // ===================== UTILS =====================
 function today(){return new Date().toISOString().slice(0,10);}
 
+// Google Sheets 回傳的日期有時是 ISO string、有時是 Excel 日期序號、有時是怪格式
+// 統一轉成 YYYY-MM-DD
+function fmtDate(v){
+  if(!v||v==='')return '';
+  // 已經是 YYYY-MM-DD 格式
+  if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v))return v;
+  // ISO string（含時間）：取前10碼，但注意時區，加8小時轉台灣時間
+  if(typeof v==='string'&&v.includes('T')){
+    const d=new Date(v);
+    if(!isNaN(d)){
+      const tw=new Date(d.getTime()+8*3600000);
+      return tw.toISOString().slice(0,10);
+    }
+  }
+  // Excel 日期序號（數字，例如 45551）
+  if(typeof v==='number'&&v>1000){
+    const d=new Date((v-25569)*86400*1000);
+    const tw=new Date(d.getTime()+8*3600000);
+    return tw.toISOString().slice(0,10);
+  }
+  // 其他情況原樣顯示
+  return String(v).slice(0,10)||'';
+}
+
+// 時間格式化：HH:MM
+function fmtTime(v){
+  if(!v||v==='')return '';
+  if(typeof v==='string'&&/^\d{2}:\d{2}/.test(v))return v.slice(0,5);
+  // Excel 時間序號（0-1 之間的小數）
+  if(typeof v==='number'&&v>=0&&v<1){
+    const totalMin=Math.round(v*24*60);
+    const h=Math.floor(totalMin/60).toString().padStart(2,'0');
+    const m=(totalMin%60).toString().padStart(2,'0');
+    return h+':'+m;
+  }
+  // ISO string 含時間
+  if(typeof v==='string'&&v.includes('T')){
+    const d=new Date(v);
+    if(!isNaN(d)){
+      const tw=new Date(d.getTime()+8*3600000);
+      return tw.toISOString().slice(11,16);
+    }
+  }
+  return String(v).slice(0,5)||'';
+}
+
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded',async()=>{
   await initDB();
@@ -1956,25 +2003,25 @@ function showProc(type){
     if(fb&&fb.style.display==='none'){fb.style.display='block';fa&&fa.classList.add('open');}
   },80);
 }
-let _quakeHistBound=false;
+let _quakeHistHandler=null;
 function bindQuakeHistEvents(){
-  if(_quakeHistBound)return;
-  _quakeHistBound=true;
   const list=document.getElementById('qh-list');
   if(!list)return;
-  list.addEventListener('click', function(e){
+  if(_quakeHistHandler) list.removeEventListener('click',_quakeHistHandler);
+  _quakeHistHandler=function(e){
     const card=e.target.closest('.js-open-quake');
     if(card){ openQuakeDetail(card.dataset.id); }
-  });
+  };
+  list.addEventListener('click',_quakeHistHandler);
 }
 function openQuakeDetail(id){
   const rec=DB.quake.find(r=>r.id===id);
   if(!rec)return;
   currentQuakeDetailId=id;
-  document.getElementById('qd-title').textContent=`🔴 ${rec.date} ${rec.time||''} M${rec.mag||'?'} 地震後巡檢`;
+  document.getElementById('qd-title').textContent=`🔴 ${fmtDate(rec.date)} ${fmtTime(rec.time)} M${rec.mag||'?'} 地震後巡檢`;
   document.getElementById('qd-sub').textContent='巡檢人：'+(rec.inspector?.name||rec.inspector||'—');
-  document.getElementById('qd-date').value=rec.date||'';
-  document.getElementById('qd-time').value=rec.time||'';
+  document.getElementById('qd-date').value=fmtDate(rec.date)||'';
+  document.getElementById('qd-time').value=fmtTime(rec.time)||'';
   document.getElementById('qd-mag').value=rec.mag||'';
   document.getElementById('qd-inspector').value=rec.inspector?.name||rec.inspector||'';
   document.getElementById('qd-remark').value=rec.remark||'';
@@ -2040,7 +2087,7 @@ async function saveQuakeDetail(){
     await refreshDB();
     toast(`✅ 修改已儲存（${newData.filter(d=>d.result).length}/${newData.length} 題已填）`);
   }catch(e){toast('❌ 儲存失敗：'+e.message,3500);}
-  document.getElementById('qd-title').textContent=`🔴 ${rec.date} ${rec.time||''} M${rec.mag||'?'} 地震後巡檢`;
+  document.getElementById('qd-title').textContent=`🔴 ${fmtDate(rec.date)} ${fmtTime(rec.time)} M${rec.mag||'?'} 地震後巡檢`;
   document.getElementById('qd-sub').textContent='巡檢人：'+(rec.inspector?.name||rec.inspector||'—');
 }
 
