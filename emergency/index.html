@@ -1244,6 +1244,9 @@ let currentQuakeDetailId = null;
 let selMode = false;
 let selIds = new Set();
 let DB = {typhoon:[], quake:[], power:[]};
+function normalizeIds(arr){
+  return (arr||[]).map(function(r){ return Object.assign({},r,{id:String(r.id)}); });
+}
 // ⚠️ 請將下面網址換成你部署 Google Apps Script 後取得的「網頁應用程式網址」
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwYsj5we4TL5eizzGJltySc8tsgCmIdClxz0iiK6hdMjoVkDTLthKopc44CVNLM5OLa/exec';
 let isSyncing = false;
@@ -1857,9 +1860,9 @@ async function gasDelete(type,ids){ return apiCall('delete',type,{ids}); }
 async function refreshDB(){
   try{
     const data=await apiGet();
-    if(data.typhoon)DB.typhoon=data.typhoon;
-    if(data.quake)DB.quake=data.quake;
-    if(data.power)DB.power=data.power;
+    if(data.typhoon)DB.typhoon=normalizeIds(data.typhoon);
+    if(data.quake)DB.quake=normalizeIds(data.quake);
+    if(data.power)DB.power=normalizeIds(data.power);
   }catch(e){console.warn('refreshDB failed',e);}
 }
 
