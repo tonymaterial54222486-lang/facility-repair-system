@@ -1420,8 +1420,8 @@ function renderTyphoonHist(){
     const tagBg =pct===100?'rgba(45,198,83,.15)':pct>0?'rgba(244,162,97,.15)':'rgba(230,57,70,.15)';
     const tagTxt=pct===100?'✅ 全部完成':pct>0?'部分完成':'未填';
     return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;touch-action:manipulation;">
-      ${isMgr?`<div class="hist-check js-toggle-sel ${selIds.has(r.id)?'sel':''}" data-id="${r.id}" style="touch-action:manipulation;">${selIds.has(r.id)?'✓':''}</div>`:''}
-      <div class="js-open-detail" data-id="${r.id}" style="flex:1;min-width:0;touch-action:manipulation;">
+      ${isMgr?`<div class="hist-check ${selIds.has(r.id)?'sel':''}" onclick="toggleSel('${r.id}',event)">${selIds.has(r.id)?'✓':''}</div>`:''}
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="openDetail('${r.id}')">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span style="font-size:14px;font-weight:700;">🌀 ${r.typhoonName}</span>
           <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${tagBg};color:${tagClr};">${tagTxt}</span>
@@ -1438,7 +1438,6 @@ function renderTyphoonHist(){
     </div>`;
   }).join('');
   updateSelCount();
-  bindTyphoonHistEvents();
 }
 let _typhoonHistHandler=null;
 function bindTyphoonHistEvents(){
@@ -1621,7 +1620,7 @@ function renderQuakeHist(){
     const tagClr=pct===100?'#1b7e38':pct>0?'#b35e00':'#c62828';
     const tagBg =pct===100?'rgba(45,198,83,.15)':pct>0?'rgba(244,162,97,.15)':'rgba(230,57,70,.15)';
     const tagTxt=pct===100?'✅ 全部完成':pct>0?'部分完成':'未填';
-    return `<div class="hist-item js-open-quake" data-id="${r.id}" style="display:flex;align-items:center;gap:10px;padding:14px 16px;touch-action:manipulation;">
+    return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;" onclick="openQuakeDetail('${r.id}')">
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span style="font-size:14px;font-weight:700;">🔴 ${fmtDate(r.date)} ${fmtTime(r.time)}</span>
@@ -1638,7 +1637,6 @@ function renderQuakeHist(){
       <div style="font-size:20px;color:var(--text2);">›</div>
     </div>`;
   }).join('');
-  bindQuakeHistEvents();
 }
 
 // ===================== POWER =====================
