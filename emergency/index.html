@@ -99,6 +99,7 @@ textarea{resize:vertical;min-height:68px;}
 .hist-item:active{background:var(--surface2);}
 .hist-check{width:20px;height:20px;border:2px solid var(--border);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;}
 .hist-check.sel{background:var(--accent);border-color:var(--accent);color:#fff;}
+.hist-cb{width:20px;height:20px;flex-shrink:0;accent-color:var(--danger);cursor:pointer;margin:0;}
 .hist-info{flex:1;min-width:0;}
 .hist-title{font-size:14px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hist-meta{font-size:11px;color:var(--text2);}
@@ -108,8 +109,11 @@ textarea{resize:vertical;min-height:68px;}
 .prog-fill.mid{background:var(--warn);}
 .prog-fill.low{background:var(--danger);}
 .prog-txt{font-size:11px;color:var(--text2);flex-shrink:0;}
-.sel-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:rgba(230,57,70,.12);border-bottom:1px solid var(--danger);font-size:13px;}
-.sel-bar span{flex:1;font-weight:700;color:var(--danger);}
+.sel-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(230,57,70,.10);border-bottom:1px solid var(--danger);font-size:13px;flex-wrap:nowrap;}
+.sel-bar-label{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap;}
+.sel-bar-label input[type=checkbox]{width:18px;height:18px;accent-color:var(--danger);cursor:pointer;margin:0;}
+.sel-bar-count{flex:1;font-weight:700;color:var(--danger);white-space:nowrap;font-size:13px;}
+.sel-bar .btn-sm{white-space:nowrap;padding:7px 12px;}
 
 /* POWER */
 .pw-option{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 14px;cursor:pointer;margin-bottom:10px;transition:background .12s;}
@@ -333,8 +337,11 @@ textarea{resize:vertical;min-height:68px;}
     <div class="hdr-title">防颱歷史紀錄</div>
   </div>
   <div id="sel-bar" class="sel-bar" style="display:none;">
-    <input type="checkbox" id="sel-all" onchange="toggleSelAll()">
-    <span id="sel-count">已選 0 筆</span>
+    <label class="sel-bar-label">
+      <input type="checkbox" id="sel-all" onchange="toggleSelAll()">
+      <span style="font-size:12px;color:var(--text2);">全選</span>
+    </label>
+    <span class="sel-bar-count" id="sel-count">已選 0 筆</span>
     <button class="btn btn-danger btn-sm" onclick="deleteSelected()">🗑 刪除</button>
     <button class="btn btn-outline btn-sm" onclick="cancelSel()">取消</button>
   </div>
@@ -443,6 +450,15 @@ textarea{resize:vertical;min-height:68px;}
   <div class="hdr">
     <button class="hdr-back" onclick="navTo('sc-quake-home')">‹</button>
     <div class="hdr-title">地震巡檢歷史</div>
+  </div>
+  <div id="q-sel-bar" class="sel-bar" style="display:none;">
+    <label class="sel-bar-label">
+      <input type="checkbox" id="q-sel-all" onchange="toggleQSelAll()">
+      <span style="font-size:12px;color:var(--text2);">全選</span>
+    </label>
+    <span class="sel-bar-count" id="q-sel-count">已選 0 筆</span>
+    <button class="btn btn-danger btn-sm" onclick="deleteQSelected()">🗑 刪除</button>
+    <button class="btn btn-outline btn-sm" onclick="cancelQSel()">取消</button>
   </div>
   <div class="history-list" id="qh-list"></div>
 </div>
@@ -1423,7 +1439,7 @@ function renderTyphoonHist(){
     const tagBg =pct===100?'rgba(45,198,83,.15)':pct>0?'rgba(244,162,97,.15)':'rgba(230,57,70,.15)';
     const tagTxt=pct===100?'✅ 全部完成':pct>0?'部分完成':'未填';
     return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;touch-action:manipulation;">
-      ${isMgr?`<div class="hist-check ${selIds.has(r.id)?'sel':''}" onclick="toggleSel('${r.id}',event)">${selIds.has(r.id)?'✓':''}</div>`:''}
+      ${isMgr?`<input type="checkbox" class="hist-cb" ${selIds.has(String(r.id))?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')">`:''}
       <div style="flex:1;min-width:0;cursor:pointer;" onclick="openDetail('${r.id}')">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span style="font-size:14px;font-weight:700;">🌀 ${r.typhoonName}</span>
@@ -1441,6 +1457,7 @@ function renderTyphoonHist(){
     </div>`;
   }).join('');
   updateSelCount();
+  syncSelAllCheckbox();
 }
 let _typhoonHistHandler=null;
 function bindTyphoonHistEvents(){
@@ -1455,18 +1472,37 @@ function bindTyphoonHistEvents(){
   };
   list.addEventListener('click',_typhoonHistHandler);
 }
-function toggleSel(id,e){
-  e&&e.stopPropagation&&e.stopPropagation();
-  selIds.has(id)?selIds.delete(id):selIds.add(id);
-  renderTyphoonHist();
+function toggleSel(id){
+  const sid=String(id);
+  selIds.has(sid)?selIds.delete(sid):selIds.add(sid);
+  updateSelCount();
+  syncSelAllCheckbox();
 }
 function toggleSelAll(){
   const all=document.getElementById('sel-all').checked;
-  if(all)DB.typhoon.forEach(r=>selIds.add(r.id));else selIds.clear();
-  renderTyphoonHist();
+  selIds.clear();
+  if(all)DB.typhoon.forEach(r=>selIds.add(String(r.id)));
+  // 同步畫面上所有 checkbox
+  document.querySelectorAll('#th-list .hist-cb').forEach(cb=>{cb.checked=all;});
+  updateSelCount();
 }
-function updateSelCount(){document.getElementById('sel-count').textContent='已選 '+selIds.size+' 筆';}
-function cancelSel(){selMode=false;selIds.clear();renderTyphoonHist();}
+function syncSelAllCheckbox(){
+  const selAll=document.getElementById('sel-all');
+  if(!selAll)return;
+  const total=DB.typhoon.length;
+  selAll.checked = total>0 && selIds.size===total;
+}
+function updateSelCount(){
+  const el=document.getElementById('sel-count');
+  if(el)el.textContent='已選 '+selIds.size+' 筆';
+}
+function cancelSel(){
+  selIds.clear();
+  document.querySelectorAll('#th-list .hist-cb').forEach(cb=>{cb.checked=false;});
+  const selAll=document.getElementById('sel-all');
+  if(selAll)selAll.checked=false;
+  updateSelCount();
+}
 function deleteSelected(){
   if(!selIds.size){toast('請先選取記錄');return;}
   showModal('確認刪除','確定刪除選取的 '+selIds.size+' 筆記錄？此操作無法復原。',async()=>{
@@ -1536,7 +1572,7 @@ function delItem(i){
 
 // ===================== MAIL / EXPORT =====================
 function sendMail(){
-  const rec=DB.typhoon.find(r=>r.id===currentDetailId);if(!rec)return;
+  const rec=DB.typhoon.find(r=>String(r.id)===String(currentDetailId));if(!rec)return;
   const done=rec.checkData.filter(d=>d.result==='是').length;
   const total=rec.checkData.length;
   const rows=(rec.items||TYPHOON_ITEMS).map((item,i)=>{
@@ -1551,15 +1587,15 @@ function sendMail(){
   window.open(`mailto:${to}?subject=${sub}&body=${body}`);
 }
 function exportCSV(){
-  const rec=DB.typhoon.find(r=>r.id===currentDetailId);if(!rec)return;
+  const rec=DB.typhoon.find(r=>String(r.id)===String(currentDetailId));if(!rec)return;
   const rows=[['編號','巡查項目','檢查結果','檢查人員','改善措施說明']];
   const items=rec.items||TYPHOON_ITEMS;
   items.forEach((item,i)=>{const d=rec.checkData[i]||{};rows.push([i+1,item,d.result||'',d.inspector||'',d.measure||'']);});
   rows.push([]);
-  rows.push(['颱風名稱',rec.typhoonName],['巡查日期',rec.date],['其他事項',rec.remark||''],['建立人員',(rec.createdBy?.name||'')+'（'+(rec.createdBy?.empid||'')+'）']);
+  rows.push(['颱風名稱',rec.typhoonName],['巡查日期',fmtDate(rec.date)],['其他事項',rec.remark||''],['建立人員',(rec.createdBy?.name||'')+'（'+(rec.createdBy?.empid||'')+'）']);
   const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
-  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:`${rec.typhoonName}_防颱工作檢核表_${rec.date}.csv`});
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:`${rec.typhoonName}_防颱工作檢核表_${fmtDate(rec.date)}.csv`});
   a.click();URL.revokeObjectURL(a.href);toast('✅ 已匯出CSV');
 }
 
@@ -1623,8 +1659,10 @@ function renderQuakeHist(){
     const tagClr=pct===100?'#1b7e38':pct>0?'#b35e00':'#c62828';
     const tagBg =pct===100?'rgba(45,198,83,.15)':pct>0?'rgba(244,162,97,.15)':'rgba(230,57,70,.15)';
     const tagTxt=pct===100?'✅ 全部完成':pct>0?'部分完成':'未填';
-    return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;" onclick="openQuakeDetail('${r.id}')">
-      <div style="flex:1;min-width:0;">
+    const isMgr=currentUser?.role==='廠務主管';
+    return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;">
+      ${isMgr?`<input type="checkbox" class="hist-cb q-hist-cb" ${qSelIds.has(String(r.id))?'checked':''} onclick="event.stopPropagation();toggleQSel('${r.id}')">`:''}
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="openQuakeDetail('${r.id}')">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span style="font-size:14px;font-weight:700;">🔴 ${fmtDate(r.date)} ${fmtTime(r.time)}</span>
           <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${tagBg};color:${tagClr};">${tagTxt}</span>
@@ -1640,6 +1678,58 @@ function renderQuakeHist(){
       <div style="font-size:20px;color:var(--text2);">›</div>
     </div>`;
   }).join('');
+  const isMgr=currentUser?.role==='廠務主管';
+  const qsb=document.getElementById('q-sel-bar');
+  if(qsb)qsb.style.display=isMgr?'flex':'none';
+  updateQSelCount();
+  syncQSelAllCheckbox();
+}
+
+// ── 地震歷史：選取與刪除 ──
+let qSelIds=new Set();
+function toggleQSel(id){
+  const sid=String(id);
+  qSelIds.has(sid)?qSelIds.delete(sid):qSelIds.add(sid);
+  updateQSelCount();
+  syncQSelAllCheckbox();
+}
+function toggleQSelAll(){
+  const all=document.getElementById('q-sel-all').checked;
+  qSelIds.clear();
+  if(all)DB.quake.forEach(r=>qSelIds.add(String(r.id)));
+  document.querySelectorAll('#qh-list .q-hist-cb').forEach(cb=>{cb.checked=all;});
+  updateQSelCount();
+}
+function syncQSelAllCheckbox(){
+  const el=document.getElementById('q-sel-all');
+  if(!el)return;
+  const total=DB.quake.length;
+  el.checked = total>0 && qSelIds.size===total;
+}
+function updateQSelCount(){
+  const el=document.getElementById('q-sel-count');
+  if(el)el.textContent='已選 '+qSelIds.size+' 筆';
+}
+function cancelQSel(){
+  qSelIds.clear();
+  document.querySelectorAll('#qh-list .q-hist-cb').forEach(cb=>{cb.checked=false;});
+  const el=document.getElementById('q-sel-all');
+  if(el)el.checked=false;
+  updateQSelCount();
+}
+function deleteQSelected(){
+  if(!qSelIds.size){toast('請先選取記錄');return;}
+  showModal('確認刪除','確定刪除選取的 '+qSelIds.size+' 筆地震巡檢記錄？此操作無法復原。',async()=>{
+    const ids=[...qSelIds];
+    toast('刪除中…');
+    try{
+      await gasDelete('quake',ids);
+      await refreshDB();
+      qSelIds.clear();
+      renderQuakeHist();
+      toast('✅ 已刪除 '+ids.length+' 筆');
+    }catch(e){toast('❌ 刪除失敗：'+e.message,3500);}
+  });
 }
 
 // ===================== POWER =====================
@@ -2105,13 +2195,13 @@ function exportQuakeCSV(){
     rows.push([q.cat, q.item, d.result||'—', '']);
   });
   rows.push([]);
-  rows.push(['地震日期',rec.date||''],['地震時間',rec.time||''],['規模',rec.mag?'M'+rec.mag:'—'],
+  rows.push(['地震日期',fmtDate(rec.date)],['地震時間',fmtTime(rec.time)],['規模',rec.mag?'M'+rec.mag:'—'],
             ['巡檢人員',rec.inspector?.name||rec.inspector||'—'],['其他備說明',rec.remark||'']);
   const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
   const a=Object.assign(document.createElement('a'),{
     href:URL.createObjectURL(blob),
-    download:`地震後異常巡檢_${rec.date||'未知'}_M${rec.mag||'?'}.csv`
+    download:`地震後異常巡檢_${fmtDate(rec.date)||'未知'}_M${rec.mag||'?'}.csv`
   });
   a.click();URL.revokeObjectURL(a.href);
   toast('✅ 已匯出CSV');
@@ -2136,7 +2226,7 @@ function sendQuakeMail(){
   }).join('\n');
   const body=encodeURIComponent(
     `地震後異常巡檢表\n` +
-    `地震日期：${rec.date||'—'} ${rec.time||''}\n` +
+    `地震日期：${fmtDate(rec.date)} ${fmtTime(rec.time)}\n` +
     `規模：M${rec.mag||'?'}\n` +
     `巡檢人員：${rec.inspector?.name||rec.inspector||'—'}\n` +
     `安全確認：${safe}/${total} 項（否=正常）\n` +
