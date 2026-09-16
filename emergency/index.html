@@ -1477,7 +1477,7 @@ function deleteSelected(){
   });
 }
 function openDetail(id){
-  const rec=DB.typhoon.find(r=>r.id===id);if(!rec)return;
+  const rec=DB.typhoon.find(r=>String(r.id)===String(id));if(!rec)return;
   currentDetailId=id;
   const items=rec.items||TYPHOON_ITEMS;
   document.getElementById('td-title').textContent=`🌀 ${rec.typhoonName}_防颱工作檢核表`;
@@ -1493,7 +1493,7 @@ function openDetail(id){
   navTo('sc-typhoon-detail');
 }
 async function saveDetail(){
-  const rec=DB.typhoon.find(r=>r.id===currentDetailId);if(!rec)return;
+  const rec=DB.typhoon.find(r=>String(r.id)===String(currentDetailId));if(!rec)return;
   const items=document.getElementById('sc-typhoon-detail')._items||rec.items||TYPHOON_ITEMS;
   const origItems=TYPHOON_ITEMS;TYPHOON_ITEMS=items;
   rec.typhoonName=document.getElementById('td-typhoon').value;
@@ -1815,9 +1815,9 @@ async function initDB(){
         await new Promise(r=>setTimeout(r, 1000*(attempt-1)));
       }
       const data=await apiGet();
-      if(data.typhoon)DB.typhoon=data.typhoon;
-      if(data.quake)DB.quake=data.quake;
-      if(data.power)DB.power=data.power;
+      if(data.typhoon)DB.typhoon=normalizeIds(data.typhoon);
+      if(data.quake)DB.quake=normalizeIds(data.quake);
+      if(data.power)DB.power=normalizeIds(data.power);
       hideLoading();
       return;
     }catch(e){
@@ -2013,9 +2013,9 @@ function bindQuakeHistEvents(){
   list.addEventListener('click',_quakeHistHandler);
 }
 function openQuakeDetail(id){
-  const rec=DB.quake.find(r=>r.id===id);
+  const rec=DB.quake.find(r=>String(r.id)===String(id));
   if(!rec)return;
-  currentQuakeDetailId=id;
+  currentQuakeDetailId=String(id);
   document.getElementById('qd-title').textContent=`🔴 ${fmtDate(rec.date)} ${fmtTime(rec.time)} M${rec.mag||'?'} 地震後巡檢`;
   document.getElementById('qd-sub').textContent='巡檢人：'+(rec.inspector?.name||rec.inspector||'—');
   document.getElementById('qd-date').value=fmtDate(rec.date)||'';
@@ -2062,7 +2062,7 @@ function onQDChg(i){
 }
 
 async function saveQuakeDetail(){
-  const rec=DB.quake.find(r=>r.id===currentQuakeDetailId);
+  const rec=DB.quake.find(r=>String(r.id)===String(currentQuakeDetailId));
   if(!rec)return;
   rec.date=document.getElementById('qd-date').value;
   rec.time=document.getElementById('qd-time').value;
@@ -2092,7 +2092,7 @@ async function saveQuakeDetail(){
 
 // ── 地震巡檢匯出/寄信 ──
 function exportQuakeCSV(){
-  const rec=DB.quake.find(r=>r.id===currentQuakeDetailId);
+  const rec=DB.quake.find(r=>String(r.id)===String(currentQuakeDetailId));
   if(!rec){toast('找不到記錄');return;}
   const allItems=[];
   QUAKE_CATS.forEach(cat=>cat.items.forEach(item=>allItems.push({cat:cat.cat,item})));
@@ -2115,7 +2115,7 @@ function exportQuakeCSV(){
 }
 
 function sendQuakeMail(){
-  const rec=DB.quake.find(r=>r.id===currentQuakeDetailId);
+  const rec=DB.quake.find(r=>String(r.id)===String(currentQuakeDetailId));
   if(!rec)return;
   const allItems=[];
   QUAKE_CATS.forEach(cat=>cat.items.forEach(item=>allItems.push({cat:cat.cat,item})));
