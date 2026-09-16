@@ -1395,9 +1395,9 @@ function renderTyphoonHist(){
     const tagClr=pct===100?'#1b7e38':pct>0?'#b35e00':'#c62828';
     const tagBg =pct===100?'rgba(45,198,83,.15)':pct>0?'rgba(244,162,97,.15)':'rgba(230,57,70,.15)';
     const tagTxt=pct===100?'✅ 全部完成':pct>0?'部分完成':'未填';
-    return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;">
-      ${isMgr?`<div class="hist-check ${selIds.has(r.id)?'sel':''}" onclick="toggleSel('${r.id}',event)">${selIds.has(r.id)?'✓':''}</div>`:''}
-      <div style="flex:1;min-width:0;" onclick="openDetail('${r.id}')">
+    return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;touch-action:manipulation;">
+      ${isMgr?`<div class="hist-check js-toggle-sel ${selIds.has(r.id)?'sel':''}" data-id="${r.id}" style="touch-action:manipulation;">${selIds.has(r.id)?'✓':''}</div>`:''}
+      <div class="js-open-detail" data-id="${r.id}" style="flex:1;min-width:0;touch-action:manipulation;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span style="font-size:14px;font-weight:700;">🌀 ${r.typhoonName}</span>
           <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${tagBg};color:${tagClr};">${tagTxt}</span>
@@ -1414,9 +1414,22 @@ function renderTyphoonHist(){
     </div>`;
   }).join('');
   updateSelCount();
+  bindTyphoonHistEvents();
+}
+let _typhoonHistBound=false;
+function bindTyphoonHistEvents(){
+  if(_typhoonHistBound)return;
+  _typhoonHistBound=true;
+  const list=document.getElementById('th-list');
+  list.addEventListener('click', function(e){
+    const chk=e.target.closest('.js-toggle-sel');
+    if(chk){ e.stopPropagation(); toggleSel(chk.dataset.id, e); return; }
+    const info=e.target.closest('.js-open-detail');
+    if(info){ openDetail(info.dataset.id); return; }
+  });
 }
 function toggleSel(id,e){
-  e&&e.stopPropagation();
+  e&&e.stopPropagation&&e.stopPropagation();
   selIds.has(id)?selIds.delete(id):selIds.add(id);
   renderTyphoonHist();
 }
@@ -1582,7 +1595,7 @@ function renderQuakeHist(){
     const tagClr=pct===100?'#1b7e38':pct>0?'#b35e00':'#c62828';
     const tagBg =pct===100?'rgba(45,198,83,.15)':pct>0?'rgba(244,162,97,.15)':'rgba(230,57,70,.15)';
     const tagTxt=pct===100?'✅ 全部完成':pct>0?'部分完成':'未填';
-    return `<div class="hist-item" style="display:flex;align-items:center;gap:10px;padding:14px 16px;" onclick="openQuakeDetail('${r.id}')">
+    return `<div class="hist-item js-open-quake" data-id="${r.id}" style="display:flex;align-items:center;gap:10px;padding:14px 16px;touch-action:manipulation;">
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span style="font-size:14px;font-weight:700;">🔴 ${r.date} ${r.time||''}</span>
@@ -1599,6 +1612,7 @@ function renderQuakeHist(){
       <div style="font-size:20px;color:var(--text2);">›</div>
     </div>`;
   }).join('');
+  bindQuakeHistEvents();
 }
 
 // ===================== POWER =====================
@@ -1874,6 +1888,17 @@ function showProc(type){
     const fa=document.getElementById('arr-'+ids[0]);
     if(fb&&fb.style.display==='none'){fb.style.display='block';fa&&fa.classList.add('open');}
   },80);
+}
+let _quakeHistBound=false;
+function bindQuakeHistEvents(){
+  if(_quakeHistBound)return;
+  _quakeHistBound=true;
+  const list=document.getElementById('qh-list');
+  if(!list)return;
+  list.addEventListener('click', function(e){
+    const card=e.target.closest('.js-open-quake');
+    if(card){ openQuakeDetail(card.dataset.id); }
+  });
 }
 function openQuakeDetail(id){
   const rec=DB.quake.find(r=>r.id===id);
