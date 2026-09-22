@@ -211,11 +211,19 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
       <textarea id="r-desc" placeholder="請詳述區域位置及異常狀況"></textarea>
     </div>
     <div class="field">
-      <label class="lbl">上傳照片（限1張，自動壓縮）</label>
+      <label class="lbl">上傳照片（最多3張，自動壓縮）</label>
       <div class="photo-upload-wrap">
         <div class="photo-slot" id="slot0" onclick="pickPhoto(0)">
           <span class="plus">＋</span><img id="prev0" style="display:none">
           <button class="rm" onclick="removePhoto(event,0)">✕</button>
+        </div>
+        <div class="photo-slot" id="slot1" onclick="pickPhoto(1)">
+          <span class="plus">＋</span><img id="prev1" style="display:none">
+          <button class="rm" onclick="removePhoto(event,1)">✕</button>
+        </div>
+        <div class="photo-slot" id="slot2" onclick="pickPhoto(2)">
+          <span class="plus">＋</span><img id="prev2" style="display:none">
+          <button class="rm" onclick="removePhoto(event,2)">✕</button>
         </div>
       </div>
       <div class="hint">📷 點擊後可選擇「直接拍照」或「從相簿選取」</div>
@@ -265,7 +273,8 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
         <option value="custom">自訂範圍</option>
       </select>
       <button class="refresh-btn" onclick="loadRecords()">重新整理</button>
-      <button class="refresh-btn" id="export-btn" style="background:#1a4a8a;display:none;" onclick="exportExcel()">📤 匯出</button>
+      <button class="refresh-btn" id="export-btn" style="background:#1a6e3c;display:none;" onclick="exportCsv()">📥 匯出CSV</button>
+      <button class="refresh-btn" id="excel-btn" style="background:#217346;display:none;" onclick="exportExcel()">📊 含圖Excel</button>
       <button class="refresh-btn" id="notify-btn" style="background:#7b3f00;display:none;" onclick="openNotifyPanel()">📨 寄送通知</button>
       <button class="refresh-btn" id="weekly-btn" style="background:#4a1a7a;display:none;" onclick="openWeeklyPanel()">📝 轉週報</button>
     </div>
@@ -330,6 +339,8 @@ let currentUser=null;
 let allRecords=[];
 let photoSlots=['','',''];
 let currentPhotoSlot=0;
+let afterPhotoSlots=['','',''];
+let currentAfterPhotoSlot=0;
 
 const BLUE_STATUS=['處理完成','其它_結案'];
 const GREY_STATUS=['非廠務權責'];
@@ -396,6 +407,36 @@ function esc(s){
   return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// ── 改善後照片 ──
+function pickAfterPhoto(idx){currentAfterPhotoSlot=idx;el('after-photo-input').value='';el('after-photo-input').click();}
+function removeAfterPhoto(e,idx){
+  e.stopPropagation();
+  afterPhotoSlots[idx]='';
+  el('aprev'+idx).style.display='none';
+  el('aslot'+idx).classList.remove('has-photo');
+}
+function handleAfterPhoto(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1280;
+      let w=img.width,h=img.height;
+      if(w>MAX||h>MAX){const s=Math.min(MAX/w,MAX/h);w=Math.round(w*s);h=Math.round(h*s);}
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      const b64=c.toDataURL('image/jpeg',0.82);
+      const si=currentAfterPhotoSlot;
+      afterPhotoSlots[si]=b64;
+      el('aprev'+si).src=b64; el('aprev'+si).style.display='block';
+      el('aslot'+si).classList.add('has-photo');
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 // ── 設定載入 ──
 function loadConfig(){
   fetch(GAS_URL+'?action=config').then(r=>r.json()).then(d=>{
@@ -446,17 +487,21 @@ function repairNext(){
   currentUser={empId:el('r-empid').value.trim(), name};
   el('r-desc').value='';
   photoSlots=['','',''];
-  el('prev0').style.display='none';
-  el('slot0').classList.remove('has-photo');
+  [0,1,2].forEach(i=>{
+    el('prev'+i).style.display='none';
+    el('slot'+i).classList.remove('has-photo');
+  });
   showScreen('s-repair-form','廠務報修');
   if(!config.floors.length) loadConfig();
 }
 
 // ── 照片 ──
-function pickPhoto(idx){el('photo-input').value='';el('photo-input').click();}
+function pickPhoto(idx){currentPhotoSlot=idx;el('photo-input').value='';el('photo-input').click();}
 function removePhoto(e,idx){
   e.stopPropagation();
-  photoSlots[0]='';el('prev0').style.display='none';el('slot0').classList.remove('has-photo');
+  photoSlots[idx]='';
+  el('prev'+idx).style.display='none';
+  el('slot'+idx).classList.remove('has-photo');
 }
 function handlePhoto(e){
   const file=e.target.files[0]; if(!file) return;
@@ -477,9 +522,10 @@ function handlePhoto(e){
         quality = Math.round((quality - 0.08) * 100) / 100;
         b64 = c.toDataURL('image/jpeg', quality);
       }
-      photoSlots[0]=b64;
-      el('prev0').src=b64; el('prev0').style.display='block';
-      el('slot0').classList.add('has-photo');
+      const si=currentPhotoSlot;
+      photoSlots[si]=b64;
+      el('prev'+si).src=b64; el('prev'+si).style.display='block';
+      el('slot'+si).classList.add('has-photo');
     };
     img.src=ev.target.result;
   };
@@ -495,7 +541,7 @@ function submitRepair(){
   fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify({action:'create',floor:el('r-floor').value,area:el('r-area').value,
       description:desc,reporterName:currentUser.name,empId:currentUser.empId,
-      photos:photoSlots[0]?[photoSlots[0]]:[]})
+      photos:photoSlots.filter(Boolean)})
   }).then(r=>r.json()).then(res=>{
     if(res.success) showScreen('s-repair-ok','報修已送出');
     else{el('r-form-err').textContent=res.error||'送出失敗';el('r-form-err').style.display='block';}
@@ -534,6 +580,8 @@ function loadRecords(){
   if(notifyBtn) notifyBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
   const weeklyBtn=el('weekly-btn');
   if(weeklyBtn) weeklyBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
+  const excelBtn=el('excel-btn');
+  if(excelBtn) excelBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
   const days=el('q-days').value;
   const fromDate=days==='custom'?el('q-date-from').value:'';
   const toDate=days==='custom'?el('q-date-to').value:'';
@@ -599,7 +647,8 @@ function renderList(){
   list.forEach(r=>{
     const cat=statusCat(r.progress);
     // 描述摘要：取前30字
-    const descSnippet=r.description?esc(r.description.slice(0,30))+(r.description.length>30?'…':''):'';
+    const descText=(r.item?r.item+' ':'')+( r.description||'');
+    const descSnippet=descText?esc(descText.slice(0,30))+(descText.length>30?'…':''):'';
     const div=document.createElement('div');
     div.className='rec-row';
     div.innerHTML=`
@@ -628,6 +677,10 @@ function showDetail(r){
   if(r.photo1) photoLinks.push(`<a href="${r.photo1}" target="_blank">照片 1</a>`);
   if(r.photo2) photoLinks.push(`<a href="${r.photo2}" target="_blank">照片 2</a>`);
   if(r.photo3) photoLinks.push(`<a href="${r.photo3}" target="_blank">照片 3</a>`);
+  const afterPhotoLinks=[];
+  if(r.afterPhoto1) afterPhotoLinks.push(`<a href="${r.afterPhoto1}" target="_blank">改善後 1</a>`);
+  if(r.afterPhoto2) afterPhotoLinks.push(`<a href="${r.afterPhoto2}" target="_blank">改善後 2</a>`);
+  if(r.afterPhoto3) afterPhotoLinks.push(`<a href="${r.afterPhoto3}" target="_blank">改善後 3</a>`);
 
   const editHtml=canEdit?`
     <div class="edit-section">
@@ -651,6 +704,16 @@ function showDetail(r){
       <div class="edit-field"><label>備註</label>
         <textarea id="dp-note" rows="3">${esc(r.note)}</textarea>
       </div>
+      <div class="edit-field">
+        <label>改善後照片（最多3張）</label>
+        <div class="photo-upload-wrap">
+          <div class="photo-slot" id="aslot0" onclick="pickAfterPhoto(0)"><span class="plus">＋</span><img id="aprev0" style="display:none"><button class="rm" onclick="removeAfterPhoto(event,0)">✕</button></div>
+          <div class="photo-slot" id="aslot1" onclick="pickAfterPhoto(1)"><span class="plus">＋</span><img id="aprev1" style="display:none"><button class="rm" onclick="removeAfterPhoto(event,1)">✕</button></div>
+          <div class="photo-slot" id="aslot2" onclick="pickAfterPhoto(2)"><span class="plus">＋</span><img id="aprev2" style="display:none"><button class="rm" onclick="removeAfterPhoto(event,2)">✕</button></div>
+        </div>
+        <div class="hint" style="margin-top:4px;">📷 點擊可拍照或從相簿選取</div>
+        <input type="file" id="after-photo-input" accept="image/*" class="hidden" onchange="handleAfterPhoto(event)">
+      </div>
       <div class="action-btns">
         <button class="save-btn" onclick="saveDetail('${r.id}')">儲存</button>
         ${canDelete?`<button class="del-btn" onclick="deleteDetail('${r.id}')">刪除此工單</button>`:''}
@@ -665,6 +728,7 @@ function showDetail(r){
       <div class="detail-row"><span class="dk">日期時間</span><span class="dv">${fmtDate(r.date)} ${fmtTime(r.time)}</span></div>
       <div class="detail-row"><span class="dk">樓層</span><span class="dv">${esc(r.floor)}</span></div>
       <div class="detail-row"><span class="dk">區域</span><span class="dv">${esc(r.area)}</span></div>
+      ${r.item?`<div class="detail-row"><span class="dk">項目</span><span class="dv">${esc(r.item)}</span></div>`:''}
       <div class="detail-row"><span class="dk">報修人</span><span class="dv">${esc(r.reporter)} ${r.empId?'（'+r.empId+'）':''}</span></div>
       <div class="detail-row"><span class="dk">部門</span><span class="dv">${esc(r.dept)||'-'}</span></div>
     </div>
@@ -672,7 +736,8 @@ function showDetail(r){
       <h4>報修說明</h4>
       <div style="font-size:14px;line-height:1.7;">${esc(r.description)}</div>
     </div>
-    ${photoLinks.length?`<div class="detail-section"><h4>照片</h4><div class="photo-links">${photoLinks.join('')}</div></div>`:''}
+    ${photoLinks.length?`<div class="detail-section"><h4>📷 現場照片</h4><div class="photo-links">${photoLinks.join('')}</div></div>`:''}
+    ${afterPhotoLinks.length?`<div class="detail-section"><h4>✅ 改善後照片</h4><div class="photo-links">${afterPhotoLinks.join('')}</div></div>`:''}
     <div class="detail-section">
       <h4>處理狀況</h4>
       <div class="detail-row"><span class="dk">維修進度</span><span class="dv"><span class="rec-badge ${cat}" style="font-size:13px;">${esc(statusLabel(r.progress))}</span></span></div>
@@ -692,10 +757,13 @@ function saveDetail(id){
   const tech=el('dp-tech').value.trim()||'徐宏昌';
   el('dp-tech').value=tech;
   showLoading(true);
+  const afterPhotos=afterPhotoSlots.filter(Boolean);
   fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({action:'update',id,progress,technician:tech,note,empId:currentUser.empId})
+    body:JSON.stringify({action:'update',id,progress,technician:tech,note,empId:currentUser.empId,
+      afterPhotos:afterPhotos.length?afterPhotos:undefined})
   }).then(r=>r.json()).then(res=>{
     if(res.success){
+      afterPhotoSlots=['','',''];
       const tip=el('saved-tip'); tip.style.display='block';
       setTimeout(()=>{tip.style.display='none'; showScreen('s-query-list','報修進度查看',currentUser.name+'（'+roleName(currentUser.role)+'）'); loadRecords();},1200);
     } else alert(res.error||'更新失敗');
@@ -713,10 +781,10 @@ function deleteDetail(id){
   }).catch(()=>alert('連線失敗')).finally(()=>showLoading(false));
 }
 
-function exportExcel(){
+function exportCsv(){
   const days=el('q-days').value;
   const statusFilter=el('q-status').value;
-  if(!confirm('確定要匯出目前篩選的工單資料並寄到您的信箱嗎？')) return;
+  if(!confirm('確定要匯出目前篩選的工單資料（CSV）並寄到您的信箱嗎？')) return;
   showLoading(true);
   fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
     body:JSON.stringify({action:'export',empId:currentUser.empId,days,statusFilter})
@@ -792,6 +860,50 @@ function sendToWeekly(){
       document.querySelectorAll('.rec-check').forEach(c=>c.checked=false);
     } else alert('轉入失敗：'+(res.error||'未知錯誤'));
   }).catch(()=>alert('連線失敗，請重試')).finally(()=>showLoading(false));
+}
+
+// ── 含圖 Excel 匯出 ───────────────────────────────────────
+function exportExcel(){
+  if(!currentUser.empId){ alert('請先登入'); return; }
+  const days=el('q-days').value==='custom'?'custom':el('q-days').value;
+  const fromDate=days==='custom'?el('q-date-from').value:'';
+  const toDate  =days==='custom'?el('q-date-to').value:'';
+
+  if(!confirm('將匯出含照片縮圖的 Excel，同時寄送至您的信箱。\n\n' +
+    '• 篩選範圍：'+(el('q-status').options[el('q-status').selectedIndex].text)+'\n' +
+    '• 日期：'+(days==='0'||days==='custom'?'自訂範圍':el('q-days').options[el('q-days').selectedIndex].text)+'\n\n' +
+    '確認匯出？')) return;
+
+  showLoading(true);
+  const body={
+    action:'exportExcel',
+    empId:currentUser.empId,
+    days:days==='custom'||days==='0'?36500:parseInt(days),
+    statusFilter:el('q-status').value==='pending'?'open':el('q-status').value
+  };
+  if(fromDate) body.fromDate=fromDate;
+  if(toDate)   body.toDate=toDate;
+
+  fetch(GAS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(body)
+  }).then(r=>r.json()).then(res=>{
+    if(res.success){
+      // 觸發瀏覽器下載
+      const bytes=Uint8Array.from(atob(res.base64),c=>c.charCodeAt(0));
+      const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=res.fileName||'廠務報修工單含圖.xlsx';
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+      alert('✓ 含圖 Excel 已下載，並同步寄送至：'+res.email+'\n共 '+res.count+' 筆工單');
+    } else {
+      alert('匯出失敗：'+(res.error||'未知錯誤'));
+    }
+  }).catch(()=>alert('連線失敗，請重試'))
+    .finally(()=>showLoading(false));
 }
 
 // ── 寄送通知 ──────────────────────────────────────────────
