@@ -97,6 +97,10 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
 .rec-badge.red{background:#fcebeb; color:var(--danger);}
 .rec-badge.orange{background:var(--amber-bg); color:var(--amber);}
 .rec-badge.blue{background:var(--blue-bg); color:var(--blue);}
+.rec-badge.grey{background:#efefef; color:#666;}
+.rec-badge.purple{background:#f3eeff; color:#6b4fa0;}
+.rec-dot.grey{background:#aaa;}
+.rec-dot.purple{background:#9b6fd0;}
 .rec-arrow{color:var(--border); font-size:16px; flex-shrink:0;}
 
 /* 工單細項頁 */
@@ -244,20 +248,33 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
 
   <!-- 進度查詢列表 -->
   <div id="s-query-list" class="hidden">
-    <div class="toolbar">
-      <select id="q-days" onchange="loadRecords()">
-        <option value="30">近一個月</option>
+    <div class="toolbar" style="flex-wrap:wrap;">
+      <select id="q-status" onchange="renderList()" style="flex:1;min-width:110px;">
+        <option value="pending">未處理</option>
+        <option value="all">全部</option>
+        <option value="non_facility">非廠務權責</option>
+        <option value="other_eval">其它_評估中</option>
+        <option value="closed">其它_結案</option>
+      </select>
+      <select id="q-days" onchange="onDaysChange()" style="flex:1;min-width:100px;">
+        <option value="0">不限日期</option>
+        <option value="30" selected>近一個月</option>
+        <option value="90">近三個月</option>
         <option value="180">近半年</option>
         <option value="365">近一年</option>
-      </select>
-      <select id="q-status" onchange="renderList()">
-        <option value="all">全部</option>
-        <option value="open">未完成</option>
+        <option value="custom">自訂範圍</option>
       </select>
       <button class="refresh-btn" onclick="loadRecords()">重新整理</button>
       <button class="refresh-btn" id="export-btn" style="background:#1a4a8a;display:none;" onclick="exportExcel()">📤 匯出</button>
       <button class="refresh-btn" id="notify-btn" style="background:#7b3f00;display:none;" onclick="openNotifyPanel()">📨 寄送通知</button>
       <button class="refresh-btn" id="weekly-btn" style="background:#4a1a7a;display:none;" onclick="openWeeklyPanel()">📝 轉週報</button>
+    </div>
+    <div id="date-range-bar" class="hidden" style="display:none;padding:8px 14px;background:#fff;border-bottom:1px solid #e5e3dc;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:12px;color:#888;flex-shrink:0;">日期範圍：</span>
+      <input type="date" id="q-date-from" style="flex:1;min-width:120px;padding:6px 8px;border:1px solid #e5e3dc;border-radius:7px;font-size:13px;">
+      <span style="font-size:12px;color:#888;">～</span>
+      <input type="date" id="q-date-to" style="flex:1;min-width:120px;padding:6px 8px;border:1px solid #e5e3dc;border-radius:7px;font-size:13px;">
+      <button onclick="loadRecords()" style="padding:6px 14px;background:#1a6e3c;color:#fff;border:none;border-radius:7px;font-size:13px;cursor:pointer;">套用</button>
     </div>
     <div class="summary" id="q-summary"></div>
     <div class="list-wrap" id="q-list"></div>
@@ -314,7 +331,9 @@ let allRecords=[];
 let photoSlots=['','',''];
 let currentPhotoSlot=0;
 
-const BLUE_STATUS=['處理完成','其它_結案','非廠務權責'];
+const BLUE_STATUS=['處理完成','其它_結案'];
+const GREY_STATUS=['非廠務權責'];
+const EVAL_STATUS=['其它_評估中','其它評估'];
 const SCREENS=['s-home','s-repair-login','s-repair-form','s-repair-ok','s-query-login','s-query-list','s-detail'];
 
 function el(id){return document.getElementById(id);}
@@ -366,6 +385,8 @@ function fmtTime(v){
 function statusCat(p){
   if(!p) return 'red';
   if(BLUE_STATUS.includes(p)) return 'blue';
+  if(GREY_STATUS.includes(p)) return 'grey';
+  if(EVAL_STATUS.includes(p)) return 'purple';
   return 'orange';
 }
 function statusLabel(p){ return p||'未處理'; }
@@ -492,6 +513,7 @@ function queryLogin(){
     if(res.success){
       currentUser={empId,...res};
       showScreen('s-query-list','報修進度查看',res.name+'（'+roleName(res.role)+'）');
+      el('q-status').value='pending';
       loadRecords();
     } else {el('q-login-err').textContent=res.error||'工號不存在';el('q-login-err').style.display='block';}
   }).catch(()=>{el('q-login-err').textContent='連線失敗';el('q-login-err').style.display='block';})
@@ -512,30 +534,81 @@ function loadRecords(){
   if(notifyBtn) notifyBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
   const weeklyBtn=el('weekly-btn');
   if(weeklyBtn) weeklyBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
-  fetch(GAS_URL+'?action=list&empId='+encodeURIComponent(currentUser.empId)+'&days='+el('q-days').value)
+  const days=el('q-days').value;
+  const fromDate=days==='custom'?el('q-date-from').value:'';
+  const toDate=days==='custom'?el('q-date-to').value:'';
+  let url=GAS_URL+'?action=list&empId='+encodeURIComponent(currentUser.empId);
+  if(days==='custom'){
+    if(fromDate) url+='&from='+encodeURIComponent(fromDate);
+    if(toDate)   url+='&to='+encodeURIComponent(toDate);
+  } else {
+    url+='&days='+(days==='0'?36500:days);
+  }
+  fetch(url)
   .then(r=>r.json()).then(res=>{if(res.success){allRecords=res.records;renderList();}})
   .finally(()=>showLoading(false));
 }
 
 // ── 條列式列表 ──
+function onDaysChange(){
+  const val=el('q-days').value;
+  const bar=el('date-range-bar');
+  if(val==='custom'){
+    bar.style.display='flex';
+    // 預設今日為止往前30天
+    const now=new Date();
+    const to=now.toISOString().slice(0,10);
+    now.setDate(now.getDate()-30);
+    const from=now.toISOString().slice(0,10);
+    if(!el('q-date-from').value) el('q-date-from').value=from;
+    if(!el('q-date-to').value)   el('q-date-to').value=to;
+  } else {
+    bar.style.display='none';
+    loadRecords();
+  }
+}
+
 function renderList(){
   const statusFilter=el('q-status').value;
-  let list=allRecords;
-  if(statusFilter==='open') list=allRecords.filter(r=>statusCat(r.progress)!=='blue');
+  let list=[...allRecords];
+
+  // 狀態篩選
+  if(statusFilter==='pending'){
+    list=list.filter(r=>!r.progress||r.progress===''||['處理中','委外處理'].includes(r.progress));
+  } else if(statusFilter==='non_facility'){
+    list=list.filter(r=>GREY_STATUS.includes(r.progress));
+  } else if(statusFilter==='other_eval'){
+    list=list.filter(r=>EVAL_STATUS.includes(r.progress));
+  } else if(statusFilter==='closed'){
+    list=list.filter(r=>BLUE_STATUS.includes(r.progress));
+  }
+  // all → 不過濾
+
+  // 依 ID 排序（數字部分降冪，最新在上）
+  list.sort((a,b)=>{
+    const na=parseInt((a.id||'').replace(/\D/g,''))||0;
+    const nb=parseInt((b.id||'').replace(/\D/g,''))||0;
+    return nb-na;
+  });
+
   el('q-summary').textContent='共 '+list.length+' 筆';
   const wrap=el('q-list'); wrap.innerHTML='';
   if(!list.length){wrap.innerHTML='<div class="empty">目前沒有符合條件的紀錄</div>';return;}
+
+  const canFacility=currentUser.role==='facility'||currentUser.role==='facility_mgr';
   list.forEach(r=>{
     const cat=statusCat(r.progress);
+    // 描述摘要：取前30字
+    const descSnippet=r.description?esc(r.description.slice(0,30))+(r.description.length>30?'…':''):'';
     const div=document.createElement('div');
     div.className='rec-row';
-    const canNotify=currentUser.role==='facility'||currentUser.role==='facility_mgr';
     div.innerHTML=`
-      ${canNotify?`<input type="checkbox" class="rec-check" data-id="${esc(r.id)}" onclick="event.stopPropagation()" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;">`:'' }
+      ${canFacility?`<input type="checkbox" class="rec-check" data-id="${esc(r.id)}" onclick="event.stopPropagation()" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;">`:'' }
       <div class="rec-dot ${cat}"></div>
       <div class="rec-main">
         <div class="rec-title">${esc(r.floor)} ${esc(r.area)}</div>
-        <div class="rec-sub">${fmtDate(r.date)} ${fmtTime(r.time)} · ${esc(r.reporter||r.empId)}</div>
+        <div class="rec-desc" style="font-size:13px;color:#333;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${descSnippet}</div>
+        <div class="rec-sub">#${esc(r.id)} · ${fmtDate(r.date)} · ${esc(r.reporter||r.empId)}</div>
       </div>
       <span class="rec-badge ${cat}">${esc(statusLabel(r.progress))}</span>
       <span class="rec-arrow">›</span>`;
