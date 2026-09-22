@@ -71,6 +71,7 @@ body{
 .card.c-equip::before{background:#7b5ea7;}
 .card.c-weekly::before{background:#6366f1;}
 .card.c-chart::before{background:var(--warn);}
+.card.c-cleanroom::before{background:#0891b2;}
 .card:active{transform:scale(.98);}
 .card.live:hover{border-color:var(--accent);}
 .card-icon{font-size:32px;flex-shrink:0;width:42px;text-align:center;}
@@ -258,6 +259,24 @@ body{
         <div class="card-body">
           <h3>廠務行動化週報 <span class="badge badge-live">已上線</span></h3>
           <p>即時記錄每日工作，自動彙整匯出 PDF / Excel 並寄送</p>
+        </div>
+        <div class="card-arrow">›</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- ══════════ 環境監控 ══════════ -->
+  <div>
+    <div class="section-title">
+      <span>🌡️ 環境監控</span>
+      <span class="line"></span>
+    </div>
+    <div class="cards">
+      <a class="card c-cleanroom live" href="https://s68629-bit.github.io/cleanroom/index.html" target="_blank">
+        <div class="card-icon">🧹</div>
+        <div class="card-body">
+          <h3>無塵室微粒子量測 <span class="badge badge-live">已上線</span></h3>
+          <p>無塵室各測點微粒子濃度即時記錄與趨勢分析</p>
         </div>
         <div class="card-arrow">›</div>
       </a>
