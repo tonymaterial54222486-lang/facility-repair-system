@@ -257,6 +257,7 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
       <button class="refresh-btn" onclick="loadRecords()">重新整理</button>
       <button class="refresh-btn" id="export-btn" style="background:#1a4a8a;display:none;" onclick="exportExcel()">📤 匯出</button>
       <button class="refresh-btn" id="notify-btn" style="background:#7b3f00;display:none;" onclick="openNotifyPanel()">📨 寄送通知</button>
+      <button class="refresh-btn" id="weekly-btn" style="background:#4a1a7a;display:none;" onclick="openWeeklyPanel()">📝 轉週報</button>
     </div>
     <div class="summary" id="q-summary"></div>
     <div class="list-wrap" id="q-list"></div>
@@ -265,6 +266,24 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
   <!-- 工單細項 -->
   <div id="s-detail" class="hidden">
     <div class="detail-wrap" id="detail-content"></div>
+  </div>
+</div>
+
+<!-- 轉週報彈出層 -->
+<div id="weekly-overlay" class="overlay hidden" onclick="closeWeeklyPanel()">
+  <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px;padding:24px;width:92%;max-width:420px;max-height:85vh;overflow-y:auto;">
+    <h3 style="margin:0 0 4px;font-size:17px;color:#4a1a7a;">📝 轉入廠務週報</h3>
+    <p style="margin:0 0 14px;font-size:13px;color:#888;">以下工單將以「本週完成」寫入廠務週報，完成日期預設為今日</p>
+    <div id="weekly-preview" style="margin-bottom:16px;"></div>
+    <div style="background:#f8f4ff;border-radius:8px;padding:10px 14px;margin-bottom:16px;">
+      <div style="font-size:12px;color:#6b4fa0;margin-bottom:6px;font-weight:500;">完成日期</div>
+      <input type="date" id="weekly-date" style="width:100%;padding:9px 12px;border:1px solid #d8d5cc;border-radius:8px;font-size:15px;font-family:inherit;">
+      <div style="font-size:12px;color:#888;margin-top:5px;">※ 所有選取工單使用同一完成日期</div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="closeWeeklyPanel()" style="flex:1;padding:12px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:14px;cursor:pointer;">取消</button>
+      <button onclick="sendToWeekly()" style="flex:1;padding:12px;background:#4a1a7a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">確認轉入</button>
+    </div>
   </div>
 </div>
 
@@ -491,6 +510,8 @@ function loadRecords(){
   if(exportBtn) exportBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
   const notifyBtn=el('notify-btn');
   if(notifyBtn) notifyBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
+  const weeklyBtn=el('weekly-btn');
+  if(weeklyBtn) weeklyBtn.style.display=(currentUser.role==='facility'||currentUser.role==='facility_mgr')?'block':'none';
   fetch(GAS_URL+'?action=list&empId='+encodeURIComponent(currentUser.empId)+'&days='+el('q-days').value)
   .then(r=>r.json()).then(res=>{if(res.success){allRecords=res.records;renderList();}})
   .finally(()=>showLoading(false));
@@ -629,6 +650,74 @@ function exportExcel(){
   }).then(r=>r.json()).then(res=>{
     if(res.success) alert('✓ 已寄出！共 '+res.count+' 筆\n收件信箱：'+res.email);
     else alert(res.error||'匯出失敗');
+  }).catch(()=>alert('連線失敗，請重試')).finally(()=>showLoading(false));
+}
+
+// ── 轉週報 ──────────────────────────────────────────────
+const WEEKLY_GAS_URL='https://script.google.com/macros/s/AKfycbw228c9_wyGChUXZb7Ag7ZS1_oRxCeJrBKOSrgY3YxZSIy4sIesBpsiBmcVzUemPfud/exec';
+
+function openWeeklyPanel(){
+  const checks = document.querySelectorAll('.rec-check:checked');
+  if(checks.length === 0){ alert('請先勾選要轉入週報的工單'); return; }
+
+  // 取今日日期填入預設
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const dd = String(today.getDate()).padStart(2,'0');
+  el('weekly-date').value = `${yyyy}-${mm}-${dd}`;
+
+  // 預覽清單
+  const ids = [...checks].map(c=>c.dataset.id);
+  const items = allRecords.filter(r=>ids.includes(r.id));
+  el('weekly-preview').innerHTML = items.map(r=>`
+    <div style="padding:9px 12px;background:#f8f4ff;border-radius:8px;margin-bottom:6px;font-size:13px;line-height:1.5;">
+      <span style="color:#4a1a7a;font-weight:500;">${esc(r.floor)} ${esc(r.area)}</span><br>
+      <span style="color:#444;">${esc(r.description)}</span><br>
+      <span style="color:#888;font-size:12px;">進度：${esc(r.progress||'未指派')}</span>
+    </div>`).join('');
+
+  el('weekly-overlay').classList.remove('hidden');
+}
+
+function closeWeeklyPanel(){
+  el('weekly-overlay').classList.add('hidden');
+}
+
+function sendToWeekly(){
+  const checks = [...document.querySelectorAll('.rec-check:checked')];
+  if(checks.length === 0){ alert('請勾選工單'); return; }
+
+  const workDate = el('weekly-date').value;
+  if(!workDate){ alert('請選擇完成日期'); return; }
+
+  const ids = checks.map(c=>c.dataset.id);
+  const items = allRecords.filter(r=>ids.includes(r.id)).map(r=>({
+    floor:       r.floor,
+    area:        r.area,
+    description: r.description,
+    progress:    r.progress || '',
+    remark:      r.note || '',
+    date:        workDate
+  }));
+
+  closeWeeklyPanel();
+  showLoading(true);
+  fetch(WEEKLY_GAS_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({
+      action:     'importFromRepair',
+      empId:      currentUser.empId,
+      reporter:   currentUser.name,
+      department: '廠務',
+      items
+    })
+  }).then(r=>r.json()).then(res=>{
+    if(res.ok){
+      alert('✓ 已轉入週報！共 '+res.result.imported+' 筆\n可至廠務週報系統查看「本週完成」清單');
+      document.querySelectorAll('.rec-check').forEach(c=>c.checked=false);
+    } else alert('轉入失敗：'+(res.error||'未知錯誤'));
   }).catch(()=>alert('連線失敗，請重試')).finally(()=>showLoading(false));
 }
 
