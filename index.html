@@ -214,7 +214,8 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
           <button class="rm" onclick="removePhoto(event,0)">✕</button>
         </div>
       </div>
-      <input type="file" id="photo-input" accept="image/*" capture="environment"
+      <div class="hint">📷 點擊後可選擇「直接拍照」或「從相簿選取」</div>
+      <input type="file" id="photo-input" accept="image/*"
         class="hidden" onchange="handlePhoto(event)">
     </div>
     <div class="err" id="r-form-err"></div>
