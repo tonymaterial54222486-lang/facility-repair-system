@@ -586,8 +586,8 @@ function renderList(){
 
   // 依 ID 排序（數字部分降冪，最新在上）
   list.sort((a,b)=>{
-    const na=parseInt((a.id||'').replace(/\D/g,''))||0;
-    const nb=parseInt((b.id||'').replace(/\D/g,''))||0;
+    const na=parseInt(String(a.id||'').replace(/[^0-9]/g,''))||0;
+    const nb=parseInt(String(b.id||'').replace(/[^0-9]/g,''))||0;
     return nb-na;
   });
 
