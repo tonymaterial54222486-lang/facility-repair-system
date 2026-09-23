@@ -113,6 +113,12 @@ select{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.o
 .photo-links{display:flex; flex-direction:column; gap:6px;}
 .photo-links a{font-size:14px; color:var(--blue); text-decoration:none; display:flex; align-items:center; gap:6px;}
 .photo-links a:before{content:"📷"; font-size:16px;}
+.photo-thumbs{display:flex; flex-wrap:wrap; gap:8px;}
+.photo-thumb{width:104px; height:104px; border-radius:8px; overflow:hidden; background:#f0efe9;
+  display:flex; align-items:center; justify-content:center; border:1px solid var(--border);}
+.photo-thumb img{width:100%; height:100%; object-fit:cover; display:block; cursor:zoom-in;}
+.photo-thumb-loading{font-size:12px; color:var(--muted);}
+.photo-thumb-fail a{font-size:12px; color:var(--blue); text-decoration:none; padding:4px;}
 
 .edit-section{margin-top:16px; padding-top:16px; border-top:1px solid var(--border);}
 .edit-section h4{margin:0 0 10px; font-size:13px; font-weight:500; color:var(--muted);}
@@ -439,8 +445,16 @@ function handleAfterPhoto(e){
 
 // ── 設定載入 ──
 function loadConfig(){
-  fetch(GAS_URL+'?action=config').then(r=>r.json()).then(d=>{
+  return fetch(GAS_URL+'?action=config').then(r=>r.json()).then(d=>{
     config=d; buildFloorSelect(); filterAreas();
+    // 若使用者在 config 載入完成前就打完工號，這裡補做一次自動帶入姓名
+    const idEl=el('r-empid');
+    if(idEl){
+      const id=idEl.value.trim();
+      if(id && config.employees && config.employees[id] && !el('r-name').value.trim()){
+        el('r-name').value=config.employees[id];
+      }
+    }
   }).catch(()=>{});
 }
 function buildFloorSelect(){
@@ -477,7 +491,7 @@ el('r-empid').addEventListener('input',()=>{
     el('r-name').value=config.employees[id];
   } else if(id.length >= 5) {
     // config還沒載入時，主動重新嘗試載入一次
-    if(!config.floors.length) loadConfig().then && loadConfig();
+    if(!config.floors.length) loadConfig();
   }
 });
 function repairNext(){
@@ -673,14 +687,8 @@ function showDetail(r){
   const canEdit=role==='facility'||role==='facility_mgr';
   const canDelete=role==='facility_mgr';
 
-  const photoLinks=[];
-  if(r.photo1) photoLinks.push(`<a href="${r.photo1}" target="_blank">照片 1</a>`);
-  if(r.photo2) photoLinks.push(`<a href="${r.photo2}" target="_blank">照片 2</a>`);
-  if(r.photo3) photoLinks.push(`<a href="${r.photo3}" target="_blank">照片 3</a>`);
-  const afterPhotoLinks=[];
-  if(r.afterPhoto1) afterPhotoLinks.push(`<a href="${r.afterPhoto1}" target="_blank">改善後 1</a>`);
-  if(r.afterPhoto2) afterPhotoLinks.push(`<a href="${r.afterPhoto2}" target="_blank">改善後 2</a>`);
-  if(r.afterPhoto3) afterPhotoLinks.push(`<a href="${r.afterPhoto3}" target="_blank">改善後 3</a>`);
+  const photoUrls=[r.photo1,r.photo2,r.photo3].filter(Boolean);
+  const afterPhotoUrls=[r.afterPhoto1,r.afterPhoto2,r.afterPhoto3].filter(Boolean);
 
   const editHtml=canEdit?`
     <div class="edit-section">
@@ -736,8 +744,8 @@ function showDetail(r){
       <h4>報修說明</h4>
       <div style="font-size:14px;line-height:1.7;">${esc(r.description)}</div>
     </div>
-    ${photoLinks.length?`<div class="detail-section"><h4>📷 現場照片</h4><div class="photo-links">${photoLinks.join('')}</div></div>`:''}
-    ${afterPhotoLinks.length?`<div class="detail-section"><h4>✅ 改善後照片</h4><div class="photo-links">${afterPhotoLinks.join('')}</div></div>`:''}
+    ${photoUrls.length?`<div class="detail-section"><h4>📷 現場照片</h4><div class="photo-thumbs" id="photo-thumbs"></div></div>`:''}
+    ${afterPhotoUrls.length?`<div class="detail-section"><h4>✅ 改善後照片</h4><div class="photo-thumbs" id="after-photo-thumbs"></div></div>`:''}
     <div class="detail-section">
       <h4>處理狀況</h4>
       <div class="detail-row"><span class="dk">維修進度</span><span class="dv"><span class="rec-badge ${cat}" style="font-size:13px;">${esc(statusLabel(r.progress))}</span></span></div>
@@ -748,6 +756,46 @@ function showDetail(r){
 
   if(canEdit) el('dp-progress').value=r.progress||'';
   showScreen('s-detail','工單詳情',r.floor+' '+r.area);
+
+  if(photoUrls.length) loadPhotoThumbnails('photo-thumbs', photoUrls);
+  if(afterPhotoUrls.length) loadPhotoThumbnails('after-photo-thumbs', afterPhotoUrls);
+}
+
+// ── 照片縮圖（後端轉base64內嵌，避開公司網路擋Google Drive網域）──
+function loadPhotoThumbnails(containerId, urls){
+  const box=el(containerId);
+  if(!box) return;
+  box.innerHTML=urls.map((u,i)=>
+    `<div class="photo-thumb" id="${containerId}-${i}"><span class="photo-thumb-loading">載入中…</span></div>`
+  ).join('');
+  urls.forEach((u,i)=>{
+    fetch(GAS_URL+'?action=photo&url='+encodeURIComponent(u))
+      .then(r=>r.json())
+      .then(res=>{
+        const cell=el(containerId+'-'+i);
+        if(!cell) return;
+        if(res.success){
+          const src='data:'+res.mime+';base64,'+res.base64;
+          cell.innerHTML=`<img src="${src}" onclick="showPhotoLightbox('${src}')">`;
+        } else {
+          cell.classList.add('photo-thumb-fail');
+          cell.innerHTML=`<a href="${u}" target="_blank">照片${i+1}</a>`;
+        }
+      })
+      .catch(()=>{
+        const cell=el(containerId+'-'+i);
+        if(!cell) return;
+        cell.classList.add('photo-thumb-fail');
+        cell.innerHTML=`<a href="${u}" target="_blank">照片${i+1}</a>`;
+      });
+  });
+}
+function showPhotoLightbox(src){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;';
+  ov.innerHTML=`<img src="${src}" style="max-width:100%;max-height:100%;border-radius:8px;">`;
+  ov.addEventListener('click',()=>ov.remove());
+  document.body.appendChild(ov);
 }
 
 function saveDetail(id){
