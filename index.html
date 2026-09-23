@@ -445,8 +445,16 @@ function handleAfterPhoto(e){
 
 // ── 設定載入 ──
 function loadConfig(){
-  fetch(GAS_URL+'?action=config').then(r=>r.json()).then(d=>{
+  return fetch(GAS_URL+'?action=config').then(r=>r.json()).then(d=>{
     config=d; buildFloorSelect(); filterAreas();
+    // 若使用者在 config 載入完成前就打完工號，這裡補做一次自動帶入姓名
+    const idEl=el('r-empid');
+    if(idEl){
+      const id=idEl.value.trim();
+      if(id && config.employees && config.employees[id] && !el('r-name').value.trim()){
+        el('r-name').value=config.employees[id];
+      }
+    }
   }).catch(()=>{});
 }
 function buildFloorSelect(){
@@ -483,7 +491,7 @@ el('r-empid').addEventListener('input',()=>{
     el('r-name').value=config.employees[id];
   } else if(id.length >= 5) {
     // config還沒載入時，主動重新嘗試載入一次
-    if(!config.floors.length) loadConfig().then && loadConfig();
+    if(!config.floors.length) loadConfig();
   }
 });
 function repairNext(){
